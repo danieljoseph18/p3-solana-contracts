@@ -19,7 +19,7 @@ pub struct AdminDeposit<'info> {
     pub token_program: Program<'info, Token>,
 }
 
-pub fn handle(ctx: Context<AdminDeposit>, amount: u64) -> Result<()> {
+pub fn handle_admin_deposit(ctx: Context<AdminDeposit>, amount: u64) -> Result<()> {
     let pool_state = &mut ctx.accounts.pool_state;
 
     // Check admin authority

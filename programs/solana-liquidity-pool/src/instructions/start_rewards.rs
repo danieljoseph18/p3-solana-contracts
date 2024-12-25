@@ -21,7 +21,7 @@ pub struct StartRewards<'info> {
     pub token_program: Program<'info, Token>,
 }
 
-pub fn handle(
+pub fn handle_start_rewards(
     ctx: Context<StartRewards>,
     usdc_amount: u64,
     tokens_per_interval: u64,

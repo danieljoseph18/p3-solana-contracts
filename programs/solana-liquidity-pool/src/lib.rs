@@ -19,27 +19,27 @@ pub mod vault {
 
     /// Initialize the liquidity pool
     pub fn initialize(ctx: Context<Initialize>, _bump: u8) -> Result<()> {
-        instructions::initialize::handle(ctx)
+        instructions::initialize::handle_initialize(ctx)
     }
 
     /// Deposit SOL or USDC into the pool
     pub fn deposit(ctx: Context<Deposit>, token_amount: u64) -> Result<()> {
-        instructions::deposit::handle(ctx, token_amount)
+        instructions::deposit::handle_deposit(ctx, token_amount)
     }
 
     /// Withdraw tokens from the pool
     pub fn withdraw(ctx: Context<Withdraw>, lp_token_amount: u64) -> Result<()> {
-        instructions::withdraw::handle(ctx, lp_token_amount)
+        instructions::withdraw::handle_withdraw(ctx, lp_token_amount)
     }
 
     /// Admin function to withdraw tokens (market making losses)
     pub fn admin_withdraw(ctx: Context<AdminWithdraw>, amount: u64) -> Result<()> {
-        instructions::admin_withdraw::handle(ctx, amount)
+        instructions::admin_withdraw::handle_admin_withdraw(ctx, amount)
     }
 
     /// Admin function to deposit tokens (market making profits)
     pub fn admin_deposit(ctx: Context<AdminDeposit>, amount: u64) -> Result<()> {
-        instructions::admin_deposit::handle(ctx, amount)
+        instructions::admin_deposit::handle_admin_deposit(ctx, amount)
     }
 
     /// Admin function to start new reward distribution
@@ -48,12 +48,12 @@ pub mod vault {
         usdc_amount: u64,
         tokens_per_interval: u64,
     ) -> Result<()> {
-        instructions::start_rewards::handle(ctx, usdc_amount, tokens_per_interval)
+        instructions::start_rewards::handle_start_rewards(ctx, usdc_amount, tokens_per_interval)
     }
 
     /// Claim user rewards
     pub fn claim_rewards(ctx: Context<ClaimRewards>) -> Result<()> {
-        instructions::claim_rewards::handle(ctx)
+        instructions::claim_rewards::handle_claim_rewards(ctx)
     }
 }
 

@@ -32,12 +32,12 @@ pub fn update_user_rewards(
         return Ok(());
     }
 
-    let pending = user_state
-        .lp_token_balance
-        .checked_mul(pool_state.tokens_per_interval)
-        .ok_or_else(|| error!(crate::errors::VaultError::MathError))?
-        .checked_mul(time_elapsed)
-        .ok_or_else(|| error!(crate::errors::VaultError::MathError))?;
+    // let pending = user_state
+    //     .lp_token_balance
+    //     .checked_mul(pool_state.tokens_per_interval)
+    //     .ok_or_else(|| error!(crate::errors::VaultError::MathError))?
+    //     .checked_mul(time_elapsed)
+    //     .ok_or_else(|| error!(crate::errors::VaultError::MathError))?;
 
     // Transfer from reward vault to user
     // In many cases you'd do a CPI to token program to actually transfer USDC

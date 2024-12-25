@@ -42,7 +42,7 @@ pub struct Deposit<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn handle(ctx: Context<Deposit>, token_amount: u64) -> Result<()> {
+pub fn handle_deposit(ctx: Context<Deposit>, token_amount: u64) -> Result<()> {
     // Capture values we need before mutable borrow
     let sol_vault = ctx.accounts.pool_state.sol_vault;
     let usdc_vault = ctx.accounts.pool_state.usdc_vault;

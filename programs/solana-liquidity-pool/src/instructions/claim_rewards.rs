@@ -27,7 +27,7 @@ pub struct ClaimRewards<'info> {
     pub token_program: Program<'info, Token>,
 }
 
-pub fn handle(ctx: Context<ClaimRewards>) -> Result<()> {
+pub fn handle_claim_rewards(ctx: Context<ClaimRewards>) -> Result<()> {
     // We just call the same logic used in deposit/withdraw "update_user_rewards"
     let pool_state = &mut ctx.accounts.pool_state;
     let user_state = &mut ctx.accounts.user_state;
