@@ -1,12 +1,18 @@
 use anchor_lang::prelude::*;
+use chainlink_solana as chainlink;
+
+// Bring in your other modules
 use instructions::*;
 
 pub mod errors;
 pub mod instructions;
 pub mod state;
 
+// Single program ID for this entire program
 declare_id!("VaULT11111111111111111111111111111111111111");
 
+/// The main vault program.
+/// It includes instructions for initialize, deposit, withdraw, admin deposit/withdraw, etc.
 #[program]
 pub mod vault {
     use super::*;
@@ -48,5 +54,35 @@ pub mod vault {
     /// Claim user rewards
     pub fn claim_rewards(ctx: Context<ClaimRewards>) -> Result<()> {
         instructions::claim_rewards::handle(ctx)
+    }
+}
+
+/// A separate module for Chainlink-related instructions (not another `#[program]`).
+/// We import the context structs (e.g., `Initialize`, `UpdateSolUsdPrice`) from `state.rs`.
+pub mod sol_usd_price_feed {
+    use super::*;
+    use crate::state::{Initialize, UpdateSolUsdPrice};
+
+    /// Initialize the PoolState with basic info. This is a separate function from
+    /// the main vault's "initialize" if you only want to run Chainlink-specific code here.
+    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
+        let pool_state = &mut ctx.accounts.pool_state;
+        pool_state.admin = *ctx.accounts.admin.key;
+        pool_state.sol_vault = *ctx.accounts.sol_vault.key;
+        pool_state.usdc_vault = *ctx.accounts.usdc_vault.key;
+        pool_state.lp_token_mint = *ctx.accounts.lp_token_mint.key;
+        pool_state.usdc_reward_vault = *ctx.accounts.usdc_reward_vault.key;
+        Ok(())
+    }
+
+    /// Pulls the latest SOL/USD price from a Chainlink feed and updates `PoolState`.
+    pub fn update_sol_usd_price(ctx: Context<UpdateSolUsdPrice>) -> Result<()> {
+        let round = chainlink::latest_round_data(
+            ctx.accounts.chainlink_program.to_account_info(),
+            ctx.accounts.chainlink_feed.to_account_info(),
+        )?;
+        let price = round.answer;
+        ctx.accounts.pool_state.sol_usd_price = price;
+        Ok(())
     }
 }

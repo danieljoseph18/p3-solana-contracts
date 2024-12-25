@@ -45,7 +45,10 @@ pub fn handle(ctx: Context<AdminWithdraw>, amount: u64) -> Result<()> {
     if ctx.accounts.vault_account.key() == pool_state.sol_vault {
         pool_state.aum_usd = pool_state
             .aum_usd
-            .checked_sub(crate::state::get_sol_usd_value(amount)?)
+            .checked_sub(crate::state::get_sol_usd_value(
+                amount,
+                pool_state.sol_usd_price,
+            )?)
             .ok_or_else(|| error!(VaultError::MathError))?;
     } else if ctx.accounts.vault_account.key() == pool_state.usdc_vault {
         pool_state.aum_usd = pool_state

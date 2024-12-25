@@ -80,7 +80,7 @@ pub fn handle(ctx: Context<Withdraw>, lp_token_amount: u64) -> Result<()> {
     // Convert that USD value into actual token amount
     let token_amount = if ctx.accounts.vault_account.mint == pool_state.sol_vault {
         // Then user is withdrawing SOL
-        get_sol_amount_from_usd(withdrawal_usd_value)?
+        get_sol_amount_from_usd(withdrawal_usd_value, pool_state.sol_usd_price)?
     } else if ctx.accounts.vault_account.mint == pool_state.usdc_vault {
         // USDC is 1:1 with USD
         withdrawal_usd_value

@@ -63,7 +63,7 @@ pub fn handle(ctx: Context<Deposit>, token_amount: u64) -> Result<()> {
 
     // Convert deposit to USD (1:1 if USDC, or via get_sol_usd_value if SOL)
     let deposit_usd = if ctx.accounts.vault_account.mint == sol_vault {
-        get_sol_usd_value(token_amount)?
+        get_sol_usd_value(token_amount, ctx.accounts.pool_state.sol_usd_price)?
     } else if ctx.accounts.vault_account.mint == usdc_vault {
         token_amount
     } else {
