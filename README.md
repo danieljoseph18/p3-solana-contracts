@@ -189,7 +189,7 @@ const getPoolData = async (poolAddress: PublicKey) => {
 
 ### 4. Fetching User Data
 
-```typescript
+````typescript
 const getUserStakeData = async (
   poolAddress: PublicKey,
   userAddress: PublicKey
@@ -217,7 +217,137 @@ const getUserStakeData = async (
     throw error;
   }
 };
-```
+
+// Get user's deposited SOL/USDC balances
+const getUserBalances = async (
+  poolAddress: PublicKey,
+  userAddress: PublicKey
+) => {
+  try {
+    // Get user's stake account
+    const [userStakeAccount] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("user_stake"),
+        poolAddress.toBuffer(),
+        userAddress.toBuffer(),
+      ],
+      program.programId
+    );
+
+    // Fetch user's stake data
+    const userStakeData = await program.account.userStake.fetch(userStakeAccount);
+
+    // Get token balances
+    const solBalance = userStakeData.solAmount.toString();
+    const usdcBalance = userStakeData.usdcAmount.toString();
+
+    return {
+      solBalance,    // in lamports (1 SOL = 1e9 lamports)
+      usdcBalance,   // in USDC base units (1 USDC = 1e6 base units)
+      solFormatted: (parseInt(solBalance) / 1e9).toFixed(9),    // in SOL
+      usdcFormatted: (parseInt(usdcBalance) / 1e6).toFixed(6),  // in USDC
+    };
+  } catch (error) {
+    console.error("Error fetching user balances:", error);
+    throw error;
+  }
+};
+
+// Get current reward rate
+const getCurrentRewardRate = async (poolAddress: PublicKey) => {
+  try {
+    const poolData = await program.account.pool.fetch(poolAddress);
+
+    return {
+      rewardRate: poolData.rewardRate.toString(),           // raw rate
+      rewardRateFormatted: (parseInt(poolData.rewardRate.toString()) / 1e9).toFixed(9), // tokens per second
+      rewardsDuration: poolData.rewardDuration.toString(),  // duration in seconds
+      isRewardsActive: poolData.lastUpdateTime.toNumber() + poolData.rewardDuration.toNumber() > Math.floor(Date.now() / 1000),
+    };
+  } catch (error) {
+    console.error("Error fetching reward rate:", error);
+    throw error;
+  }
+};
+
+// Get pending rewards available to claim
+const getPendingRewards = async (
+  poolAddress: PublicKey,
+  userAddress: PublicKey
+) => {
+  try {
+    // Get pool data
+    const poolData = await program.account.pool.fetch(poolAddress);
+
+    // Get user's stake account
+    const [userStakeAccount] = PublicKey.findProgramAddressSync(
+      [
+        Buffer.from("user_stake"),
+        poolAddress.toBuffer(),
+        userAddress.toBuffer(),
+      ],
+      program.programId
+    );
+
+    const userStakeData = await program.account.userStake.fetch(userStakeAccount);
+
+    // Calculate pending rewards
+    const currentTime = Math.floor(Date.now() / 1000);
+    const endTime = Math.min(
+      currentTime,
+      poolData.lastUpdateTime.toNumber() + poolData.rewardDuration.toNumber()
+    );
+    const timeElapsed = endTime - poolData.lastUpdateTime.toNumber();
+
+    const rewardPerToken = poolData.rewardRate
+      .mul(new anchor.BN(timeElapsed))
+      .mul(new anchor.BN(1e9))
+      .div(poolData.totalStaked);
+
+    const pending = userStakeData.amount
+      .mul(rewardPerToken)
+      .div(new anchor.BN(1e9))
+      .sub(userStakeData.rewardDebt);
+
+    return {
+      pendingRewards: pending.toString(),                    // raw amount
+      pendingRewardsFormatted: (parseInt(pending.toString()) / 1e9).toFixed(9), // in tokens
+      lastUpdateTime: poolData.lastUpdateTime.toString(),
+      rewardEndTime: (poolData.lastUpdateTime.toNumber() + poolData.rewardDuration.toNumber()).toString(),
+    };
+  } catch (error) {
+    console.error("Error calculating pending rewards:", error);
+    throw error;
+  }
+};
+
+### 5. Example Usage
+
+```typescript
+// Get all user information
+const getUserInfo = async (poolAddress: PublicKey, userAddress: PublicKey) => {
+  const [balances, rewardRate, pendingRewards] = await Promise.all([
+    getUserBalances(poolAddress, userAddress),
+    getCurrentRewardRate(poolAddress),
+    getPendingRewards(poolAddress, userAddress)
+  ]);
+
+  console.log("User Balances:", {
+    SOL: balances.solFormatted,
+    USDC: balances.usdcFormatted
+  });
+
+  console.log("Reward Rate:", {
+    rate: rewardRate.rewardRateFormatted,
+    isActive: rewardRate.isRewardsActive
+  });
+
+  console.log("Pending Rewards:", {
+    amount: pendingRewards.pendingRewardsFormatted,
+    endTime: new Date(parseInt(pendingRewards.rewardEndTime) * 1000).toLocaleString()
+  });
+};
+````
 
 ## Error Handling
 
