@@ -44,14 +44,22 @@ pub fn handle_start_rewards(
     );
     token::transfer(cpi_ctx, usdc_amount)?;
 
-    // Set reward parameters
-    let now = Clock::get()?.unix_timestamp as u64;
+    // Record how many rewards were added for this reward period
+    pool_state.total_rewards_deposited = usdc_amount;
+    pool_state.total_rewards_claimed = 0; // reset for the new period
+
+    // Set rate & reward times
     pool_state.tokens_per_interval = tokens_per_interval;
+    let now = Clock::get()?.unix_timestamp as u64;
     pool_state.reward_start_time = now;
     pool_state.reward_end_time = now
         .checked_add(604800)
         .ok_or_else(|| error!(VaultError::MathError))?;
 
-    msg!("Started new reward distribution.");
+    msg!(
+        "Started new reward distribution: {} USDC at rate {}",
+        usdc_amount,
+        tokens_per_interval
+    );
     Ok(())
 }

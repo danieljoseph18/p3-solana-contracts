@@ -33,7 +33,13 @@ pub struct Initialize<'info> {
     pub usdc_reward_vault: Account<'info, TokenAccount>,
 
     /// LP token mint
-    #[account(init_if_needed, payer = admin, mint::decimals = 6, mint::authority = admin)]
+    #[account(
+        init_if_needed,
+        payer = admin,
+        mint::decimals = 6,
+        mint::authority = pool_state,
+        mint::freeze_authority = pool_state
+    )]
     pub lp_token_mint: Account<'info, Mint>,
 
     #[account(address = anchor_spl::token::ID)]
@@ -49,7 +55,8 @@ pub fn handle_initialize(ctx: Context<Initialize>) -> Result<()> {
     pool_state.sol_vault = ctx.accounts.sol_vault.key();
     pool_state.usdc_vault = ctx.accounts.usdc_vault.key();
     pool_state.lp_token_mint = ctx.accounts.lp_token_mint.key();
-    pool_state.aum_usd = 0;
+    pool_state.sol_deposited = 0;
+    pool_state.usdc_deposited = 0;
     pool_state.tokens_per_interval = 0;
     pool_state.reward_start_time = 0;
     pool_state.reward_end_time = 0;

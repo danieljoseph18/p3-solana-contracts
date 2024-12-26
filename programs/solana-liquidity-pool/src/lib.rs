@@ -9,12 +9,12 @@ pub mod instructions;
 pub mod state;
 
 // Single program ID for this entire program
-declare_id!("VaULT11111111111111111111111111111111111111");
+declare_id!("CkpZTxULEPgWHKkmWcNdvBR4SkijmUMY3sRYurGeTTvF");
 
 /// The main vault program.
 /// It includes instructions for initialize, deposit, withdraw, admin deposit/withdraw, etc.
 #[program]
-pub mod vault {
+pub mod solana_liquidity_pool {
     use super::*;
 
     /// Initialize the liquidity pool

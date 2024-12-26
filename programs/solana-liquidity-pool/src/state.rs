@@ -1,7 +1,5 @@
 use anchor_lang::prelude::*;
 
-// We do *not* declare an ID here again. Only one declare_id! in lib.rs.
-
 // -----------------------------------------------
 // Context structs for Chainlink usage
 // -----------------------------------------------
@@ -60,8 +58,11 @@ pub struct PoolState {
     /// LP token mint
     pub lp_token_mint: Pubkey,
 
-    /// Total value locked in USD
-    pub aum_usd: u64,
+    /// How many SOL tokens are currently deposited in total.
+    pub sol_deposited: u64,
+
+    /// How many USDC tokens are currently deposited in total.
+    pub usdc_deposited: u64,
 
     /// USDC earned per second per LP token
     pub tokens_per_interval: u64,
@@ -77,20 +78,32 @@ pub struct PoolState {
 
     /// Current SOL/USD price from Chainlink
     pub sol_usd_price: i128,
+
+    // -----------------------------------------------
+    // New fields to ensure we never exceed the deposited rewards
+    // -----------------------------------------------
+    /// How many USDC tokens the admin deposited for this reward period
+    pub total_rewards_deposited: u64,
+
+    /// How many USDC have actually been claimed by users so far
+    pub total_rewards_claimed: u64,
 }
 
 impl PoolState {
-    // Adjust LEN if your final layout changes
+    /// Adjust this if you add or remove fields
     pub const LEN: usize = 32  // admin
-        + 32  // sol_vault
-        + 32  // usdc_vault
-        + 32  // lp_token_mint
-        + 8   // aum_usd
-        + 8   // tokens_per_interval
-        + 8   // reward_start_time
-        + 8   // reward_end_time
-        + 32  // usdc_reward_vault
-        + 16; // sol_usd_price
+        + 32                  // sol_vault
+        + 32                  // usdc_vault
+        + 32                  // lp_token_mint
+        + 8                   // sol_deposited
+        + 8                   // usdc_deposited
+        + 8                   // tokens_per_interval
+        + 8                   // reward_start_time
+        + 8                   // reward_end_time
+        + 32                  // usdc_reward_vault
+        + 16                  // sol_usd_price (i128)
+        + 8                   // total_rewards_deposited
+        + 8; // total_rewards_claimed
 }
 
 /// UserState stores user-specific info (in practice often combined into a single PDA).
@@ -98,10 +111,22 @@ impl PoolState {
 pub struct UserState {
     /// User pubkey
     pub owner: Pubkey,
+
     /// User's LP token balance (tracked within the program, not minted supply)
     pub lp_token_balance: u64,
-    /// Last time user claimed rewards
+
+    /// Last time user claimed (or had rewards updated)
     pub last_claim_timestamp: u64,
+
+    /// Accumulated USDC rewards that have not yet been claimed
+    pub pending_rewards: u64,
+}
+
+impl UserState {
+    pub const LEN: usize = 32 // owner
+        + 8  // lp_token_balance
+        + 8  // last_claim_timestamp
+        + 8; // pending_rewards
 }
 
 // -----------------------------------------------
@@ -111,8 +136,8 @@ pub struct UserState {
 /// Helper function for SOL -> USD conversions using the `sol_usd_price` from Chainlink.
 pub fn get_sol_usd_value(sol_amount: u64, sol_usd_price: i128) -> Result<u64> {
     // Example: Chainlink's price feed might be $20 with an 8-decimal feed
-    // so round.answer = 2,000,000,000 for $20 * 100,000,000
-    // Hence dividing by 100,000,000 to get back to "raw" USD value.
+    // so round.answer = 2,000_000_000 for $20 * 100_000_000
+    // We do a division by 100_000_000 to get back to "raw" USD value.
     let usd = (sol_amount as u128)
         .checked_mul(sol_usd_price as u128)
         .unwrap_or(0)

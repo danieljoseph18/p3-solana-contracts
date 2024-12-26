@@ -1,7 +1,8 @@
+use crate::errors::VaultError;
 use crate::instructions::helpers::update_user_rewards;
 use crate::state::*;
 use anchor_lang::prelude::*;
-use anchor_spl::token::{Token, TokenAccount};
+use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
 #[derive(Accounts)]
 pub struct ClaimRewards<'info> {
@@ -28,20 +29,62 @@ pub struct ClaimRewards<'info> {
 }
 
 pub fn handle_claim_rewards(ctx: Context<ClaimRewards>) -> Result<()> {
-    // We just call the same logic used in deposit/withdraw "update_user_rewards"
+    // First, grab an immutable reference to the pool_state AccountInfo
+    // to use as the authority in the token transfer.
+    let pool_state_info = ctx.accounts.pool_state.to_account_info();
+
+    // Next, create a mutable reference to the PoolState account data.
     let pool_state = &mut ctx.accounts.pool_state;
     let user_state = &mut ctx.accounts.user_state;
 
-    // The update_user_rewards function does the actual "claim logic".
-    // However, that’s set up to do a direct “transfer” inside (which we stubbed out).
-    // So you can implement it inline here or unify logic in a real scenario.
-
+    // 1) Update user’s accrual to get an up-to-date `pending_rewards`
     update_user_rewards(pool_state, user_state)?;
 
-    // If you wanted to do a direct CPI transfer here for actual “pending” tokens:
-    // ...
-    // For demonstration, we rely on the logic in `update_user_rewards`.
+    // 2) The user now has some "pending" amount stored locally
+    let pending = user_state.pending_rewards;
+    if pending == 0 {
+        msg!("No rewards to claim.");
+        return Ok(());
+    }
 
-    msg!("Claimed rewards for user: {}", ctx.accounts.user.key());
+    // 3) Check how much is still available in the reward pool
+    let available = pool_state
+        .total_rewards_deposited
+        .saturating_sub(pool_state.total_rewards_claimed);
+
+    // Clamp the user’s claim if not enough remains in the reward pool
+    let to_claim = pending.min(available);
+    if to_claim == 0 {
+        msg!("No rewards left in the pool to claim.");
+        return Ok(());
+    }
+
+    // 4) Transfer `to_claim` tokens from the reward vault to the user
+    let cpi_ctx = CpiContext::new(
+        ctx.accounts.token_program.to_account_info(),
+        Transfer {
+            from: ctx.accounts.usdc_reward_vault.to_account_info(),
+            to: ctx.accounts.user_usdc_account.to_account_info(),
+            authority: pool_state_info, // the account that signs for the vault
+        },
+    );
+    token::transfer(cpi_ctx.with_signer(&[]), to_claim)?;
+
+    // 5) Update global and user-level state
+    pool_state.total_rewards_claimed = pool_state
+        .total_rewards_claimed
+        .checked_add(to_claim)
+        .ok_or_else(|| error!(VaultError::MathError))?;
+
+    user_state.pending_rewards = user_state
+        .pending_rewards
+        .checked_sub(to_claim)
+        .ok_or_else(|| error!(VaultError::MathError))?;
+
+    msg!(
+        "User {} claimed {} USDC in rewards.",
+        ctx.accounts.user.key(),
+        to_claim
+    );
     Ok(())
 }

@@ -1,28 +1,27 @@
 use crate::state::{PoolState, UserState};
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::clock;
 
 /// Update the user’s pending rewards right before their LP balance changes.
 pub fn update_user_rewards(
     pool_state: &mut Account<PoolState>,
     user_state: &mut Account<UserState>,
 ) -> Result<()> {
+    // If user has zero LP, there's no new accrual
     if user_state.lp_token_balance == 0 {
-        // No need to claim if user has zero balance
-        user_state.last_claim_timestamp = clock::Clock::get()?.unix_timestamp as u64;
+        user_state.last_claim_timestamp = Clock::get()?.unix_timestamp as u64;
         return Ok(());
     }
-    // We'll do a direct "claim" logic here, so that every deposit/withdraw
-    // auto-claims before changing the user's LP balance.
-    let now = clock::Clock::get()?.unix_timestamp as u64;
+
+    let now = Clock::get()?.unix_timestamp as u64;
     let last_claim = user_state.last_claim_timestamp;
 
-    // If rewards haven't started or user claimed recently, nothing new to claim
+    // If before start or after end, no accrual
     if now <= pool_state.reward_start_time || last_claim >= pool_state.reward_end_time {
         user_state.last_claim_timestamp = now;
         return Ok(());
     }
 
+    // Bound the claim window
     let claim_start = last_claim.max(pool_state.reward_start_time);
     let claim_end = now.min(pool_state.reward_end_time);
     let time_elapsed = claim_end.saturating_sub(claim_start);
@@ -32,19 +31,22 @@ pub fn update_user_rewards(
         return Ok(());
     }
 
-    // let pending = user_state
-    //     .lp_token_balance
-    //     .checked_mul(pool_state.tokens_per_interval)
-    //     .ok_or_else(|| error!(crate::errors::VaultError::MathError))?
-    //     .checked_mul(time_elapsed)
-    //     .ok_or_else(|| error!(crate::errors::VaultError::MathError))?;
+    // Calculate newly accrued rewards for the user
+    // pending = (lp_token_balance * tokens_per_interval) * time_elapsed
+    let newly_accrued = user_state
+        .lp_token_balance
+        .checked_mul(pool_state.tokens_per_interval)
+        .ok_or_else(|| error!(crate::errors::VaultError::MathError))?
+        .checked_mul(time_elapsed)
+        .ok_or_else(|| error!(crate::errors::VaultError::MathError))?;
 
-    // Transfer from reward vault to user
-    // In many cases you'd do a CPI to token program to actually transfer USDC
-    // Here we can just assume the token transfer is done.
-    // ...
+    // 1) Add the newly accrued to user_state.pending_rewards
+    user_state.pending_rewards = user_state
+        .pending_rewards
+        .checked_add(newly_accrued)
+        .ok_or_else(|| error!(crate::errors::VaultError::MathError))?;
 
-    // Update last claim time
+    // 2) Update user’s last claim timestamp
     user_state.last_claim_timestamp = now;
 
     Ok(())
