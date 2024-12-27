@@ -8,7 +8,11 @@ pub struct AdminWithdraw<'info> {
     #[account(mut)]
     pub admin: Signer<'info>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"pool-state".as_ref()],
+        bump
+    )]
     pub pool_state: Account<'info, PoolState>,
 
     #[account(mut)]
@@ -62,7 +66,10 @@ pub fn handle_admin_withdraw(ctx: Context<AdminWithdraw>, amount: u64) -> Result
             authority: pool_state_info,
         },
     );
-    token::transfer(cpi_ctx.with_signer(&[]), amount)?;
+    token::transfer(
+        cpi_ctx.with_signer(&[&[b"pool-state".as_ref(), &[ctx.bumps.pool_state]]]),
+        amount,
+    )?;
 
     // Decrement deposited tokens
     if ctx.accounts.vault_account.key() == pool_state.sol_vault {

@@ -9,7 +9,11 @@ pub struct Withdraw<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"pool-state".as_ref()],
+        bump
+    )]
     pub pool_state: Account<'info, PoolState>,
 
     /// The user's associated UserState
@@ -78,7 +82,7 @@ pub fn handle_withdraw(ctx: Context<Withdraw>, lp_token_amount: u64) -> Result<(
     // 1) Compute the pool's total AUM in USD at this moment.
     // ----------------------------------------------------------------
     // First, if withdrawing SOL, fetch the latest SOL/USD price
-    if ctx.accounts.vault_account.mint == pool_state.sol_vault {
+    if ctx.accounts.vault_account.key() == pool_state.sol_vault {
         let round = chainlink::latest_round_data(
             ctx.accounts.chainlink_program.to_account_info(),
             ctx.accounts.chainlink_feed.to_account_info(),
@@ -106,10 +110,10 @@ pub fn handle_withdraw(ctx: Context<Withdraw>, lp_token_amount: u64) -> Result<(
     // ----------------------------------------------------------------
     // 3) Convert that USD value into the correct token amount (SOL or USDC).
     // ----------------------------------------------------------------
-    let token_amount = if ctx.accounts.vault_account.mint == pool_state.sol_vault {
+    let token_amount = if ctx.accounts.vault_account.key() == pool_state.sol_vault {
         // Withdrawing SOL
         get_sol_amount_from_usd(withdrawal_usd_value, pool_state.sol_usd_price)?
-    } else if ctx.accounts.vault_account.mint == pool_state.usdc_vault {
+    } else if ctx.accounts.vault_account.key() == pool_state.usdc_vault {
         // USDC is 1:1 with USD
         withdrawal_usd_value
     } else {
@@ -127,18 +131,20 @@ pub fn handle_withdraw(ctx: Context<Withdraw>, lp_token_amount: u64) -> Result<(
             authority: pool_state.to_account_info(),
         },
     );
-    token::transfer(cpi_ctx_transfer.with_signer(&[]), token_amount)?;
+    token::transfer(
+        cpi_ctx_transfer.with_signer(&[&[b"pool-state".as_ref(), &[ctx.bumps.pool_state]]]),
+        token_amount,
+    )?;
 
     // ----------------------------------------------------------------
     // 5) Decrement the pool's deposited token count accordingly
     // ----------------------------------------------------------------
-    if ctx.accounts.vault_account.mint == pool_state.sol_vault {
+    if ctx.accounts.vault_account.key() == pool_state.sol_vault {
         pool_state.sol_deposited = pool_state
             .sol_deposited
             .checked_sub(token_amount)
             .ok_or_else(|| error!(VaultError::MathError))?;
-    } else {
-        // USDC Vault
+    } else if ctx.accounts.vault_account.key() == pool_state.usdc_vault {
         pool_state.usdc_deposited = pool_state
             .usdc_deposited
             .checked_sub(token_amount)

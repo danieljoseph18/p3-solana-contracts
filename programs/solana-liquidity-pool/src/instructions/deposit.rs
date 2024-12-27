@@ -10,7 +10,11 @@ pub struct Deposit<'info> {
     pub user: Signer<'info>,
 
     /// Global PoolState
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"pool-state".as_ref()],
+        bump
+    )]
     pub pool_state: Account<'info, PoolState>,
 
     /// The user's token account from which they are depositing
@@ -54,12 +58,8 @@ pub fn handle_deposit(ctx: Context<Deposit>, token_amount: u64) -> Result<()> {
     let pool_state = &mut ctx.accounts.pool_state;
     let user_state = &mut ctx.accounts.user_state;
 
-    // Identify if this deposit is SOL or USDC.
-    let sol_vault = pool_state.sol_vault;
-    let usdc_vault = pool_state.usdc_vault;
-
     // If depositing SOL, fetch latest price from Chainlink.
-    if ctx.accounts.vault_account.mint == sol_vault {
+    if ctx.accounts.vault_account.key() == pool_state.sol_vault {
         let round = chainlink::latest_round_data(
             ctx.accounts.chainlink_program.to_account_info(),
             ctx.accounts.chainlink_feed.to_account_info(),
@@ -81,7 +81,7 @@ pub fn handle_deposit(ctx: Context<Deposit>, token_amount: u64) -> Result<()> {
 
     // Determine how many tokens in USD were deposited.
     // Also update the pool's recorded total (sol_deposited / usdc_deposited).
-    let deposit_usd = if ctx.accounts.vault_account.mint == sol_vault {
+    let deposit_usd = if ctx.accounts.vault_account.key() == pool_state.sol_vault {
         // Increase total SOL
         pool_state.sol_deposited = pool_state
             .sol_deposited
@@ -89,7 +89,7 @@ pub fn handle_deposit(ctx: Context<Deposit>, token_amount: u64) -> Result<()> {
             .ok_or(VaultError::MathError)?;
 
         get_sol_usd_value(token_amount, pool_state.sol_usd_price)?
-    } else if ctx.accounts.vault_account.mint == usdc_vault {
+    } else if ctx.accounts.vault_account.key() == pool_state.usdc_vault {
         // Increase total USDC
         pool_state.usdc_deposited = pool_state
             .usdc_deposited
@@ -134,7 +134,10 @@ pub fn handle_deposit(ctx: Context<Deposit>, token_amount: u64) -> Result<()> {
             authority: pool_state.to_account_info(),
         },
     );
-    token::mint_to(cpi_ctx_mint.with_signer(&[]), lp_to_mint)?;
+    token::mint_to(
+        cpi_ctx_mint.with_signer(&[&[b"pool-state".as_ref(), &[ctx.bumps.pool_state]]]),
+        lp_to_mint,
+    )?;
 
     // Update user's record of how many LP tokens they hold
     user_state.owner = ctx.accounts.user.key();

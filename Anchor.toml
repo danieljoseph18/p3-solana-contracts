@@ -5,7 +5,7 @@ seeds = false
 skip-lint = false
 
 [programs.devnet]
-solana_liquidity_pool = "CkpZTxULEPgWHKkmWcNdvBR4SkijmUMY3sRYurGeTTvF"
+solana_liquidity_pool = "3JhuFvHHTxCGeJviVMv4SYUWQ1qAb9tFNy7ZU8dxBhpq"
 
 [registry]
 url = "https://api.apr.dev"

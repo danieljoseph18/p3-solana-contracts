@@ -4,7 +4,6 @@ use anchor_spl::token::{Mint, Token, TokenAccount};
 
 /// Context for initialize
 #[derive(Accounts)]
-#[instruction(_bump: u8)]
 pub struct Initialize<'info> {
     #[account(mut)]
     pub admin: Signer<'info>,

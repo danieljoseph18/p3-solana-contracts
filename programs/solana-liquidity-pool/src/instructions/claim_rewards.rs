@@ -9,7 +9,11 @@ pub struct ClaimRewards<'info> {
     #[account(mut)]
     pub user: Signer<'info>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"pool-state".as_ref()],
+        bump
+    )]
     pub pool_state: Account<'info, PoolState>,
 
     #[account(
@@ -68,7 +72,10 @@ pub fn handle_claim_rewards(ctx: Context<ClaimRewards>) -> Result<()> {
             authority: pool_state_info, // the account that signs for the vault
         },
     );
-    token::transfer(cpi_ctx.with_signer(&[]), to_claim)?;
+    token::transfer(
+        cpi_ctx.with_signer(&[&[b"pool-state".as_ref(), &[ctx.bumps.pool_state]]]),
+        to_claim,
+    )?;
 
     // 5) Update global and user-level state
     pool_state.total_rewards_claimed = pool_state

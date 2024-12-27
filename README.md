@@ -4,7 +4,7 @@ A Solana program for managing a liquidity pool with staking and rewards function
 
 ## Program Address
 
-- Devnet: `CkpZTxULEPgWHKkmWcNdvBR4SkijmUMY3sRYurGeTTvF`
+- Devnet: `3JhuFvHHTxCGeJviVMv4SYUWQ1qAb9tFNy7ZU8dxBhpq`
 
 ## Prerequisites
 
@@ -35,7 +35,7 @@ const provider = new anchor.AnchorProvider(
 // Initialize program
 const program = new Program<SolanaLiquidityPool>(
   IDL,
-  "CkpZTxULEPgWHKkmWcNdvBR4SkijmUMY3sRYurGeTTvF",
+  "3JhuFvHHTxCGeJviVMv4SYUWQ1qAb9tFNy7ZU8dxBhpq",
   provider
 );
 ```

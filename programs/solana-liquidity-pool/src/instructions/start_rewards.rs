@@ -7,10 +7,14 @@ pub struct StartRewards<'info> {
     #[account(mut)]
     pub admin: Signer<'info>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        seeds = [b"pool-state".as_ref()],
+        bump
+    )]
     pub pool_state: Account<'info, PoolState>,
 
-    /// Admin’s USDC token account
+    /// Admin's USDC token account
     #[account(mut)]
     pub admin_usdc_account: Account<'info, TokenAccount>,
 

@@ -9,7 +9,7 @@ pub mod instructions;
 pub mod state;
 
 // Single program ID for this entire program
-declare_id!("CkpZTxULEPgWHKkmWcNdvBR4SkijmUMY3sRYurGeTTvF");
+declare_id!("3JhuFvHHTxCGeJviVMv4SYUWQ1qAb9tFNy7ZU8dxBhpq");
 
 /// The main vault program.
 /// It includes instructions for initialize, deposit, withdraw, admin deposit/withdraw, etc.
@@ -18,8 +18,13 @@ pub mod solana_liquidity_pool {
     use super::*;
 
     /// Initialize the liquidity pool
-    pub fn initialize(ctx: Context<Initialize>, _bump: u8) -> Result<()> {
+    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
         instructions::initialize::handle_initialize(ctx)
+    }
+
+    /// Close the pool (admin only)
+    pub fn close_pool(ctx: Context<ClosePool>) -> Result<()> {
+        instructions::close_pool::handle_close_pool(ctx)
     }
 
     /// Deposit SOL or USDC into the pool

@@ -1,6 +1,7 @@
 pub mod admin_deposit;
 pub mod admin_withdraw;
 pub mod claim_rewards;
+pub mod close_pool;
 pub mod deposit;
 pub mod helpers;
 pub mod initialize;
@@ -10,6 +11,7 @@ pub mod withdraw;
 pub use admin_deposit::*;
 pub use admin_withdraw::*;
 pub use claim_rewards::*;
+pub use close_pool::*;
 pub use deposit::*;
 pub use helpers::*;
 pub use initialize::*;
