@@ -11,6 +11,14 @@ pub mod state;
 // Single program ID for this entire program
 declare_id!("3JhuFvHHTxCGeJviVMv4SYUWQ1qAb9tFNy7ZU8dxBhpq");
 
+#[event]
+pub struct RewardsClaimed {
+    pub user: Pubkey,
+    pub amount: u64,
+    pub timestamp: i64,
+    pub total_claimed: u64,
+}
+
 /// The main vault program.
 /// It includes instructions for initialize, deposit, withdraw, admin deposit/withdraw, etc.
 #[program]

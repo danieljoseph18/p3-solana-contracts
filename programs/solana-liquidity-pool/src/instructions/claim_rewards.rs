@@ -1,6 +1,6 @@
-use crate::errors::VaultError;
 use crate::instructions::helpers::update_user_rewards;
 use crate::state::*;
+use crate::{errors::VaultError, RewardsClaimed};
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 
@@ -87,6 +87,14 @@ pub fn handle_claim_rewards(ctx: Context<ClaimRewards>) -> Result<()> {
         .pending_rewards
         .checked_sub(to_claim)
         .ok_or_else(|| error!(VaultError::MathError))?;
+
+    // Emit event for subgraph indexing
+    emit!(RewardsClaimed {
+        user: ctx.accounts.user.key(),
+        amount: to_claim,
+        timestamp: Clock::get()?.unix_timestamp,
+        total_claimed: pool_state.total_rewards_claimed,
+    });
 
     msg!(
         "User {} claimed {} USDC in rewards.",

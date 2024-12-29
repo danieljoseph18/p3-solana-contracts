@@ -54,20 +54,25 @@ pub struct Deposit<'info> {
 }
 
 pub fn handle_deposit(ctx: Context<Deposit>, token_amount: u64) -> Result<()> {
+    msg!("Starting deposit of {} tokens", token_amount);
+
     // For readability
     let pool_state = &mut ctx.accounts.pool_state;
     let user_state = &mut ctx.accounts.user_state;
 
     // If depositing SOL, fetch latest price from Chainlink.
     if ctx.accounts.vault_account.key() == pool_state.sol_vault {
+        msg!("Depositing SOL, fetching latest Chainlink price");
         let round = chainlink::latest_round_data(
             ctx.accounts.chainlink_program.to_account_info(),
             ctx.accounts.chainlink_feed.to_account_info(),
         )?;
-        // Update stored SOL price
+        // Update stored SOL price (8 decimals from Chainlink)
         pool_state.sol_usd_price = round.answer;
+        msg!("Updated SOL/USD price to {} (8 dec)", round.answer);
     }
 
+    msg!("Transferring {} tokens to vault", token_amount);
     // Transfer tokens from user into the vault
     let transfer_cpi_ctx = CpiContext::new(
         ctx.accounts.token_program.to_account_info(),
@@ -78,54 +83,82 @@ pub fn handle_deposit(ctx: Context<Deposit>, token_amount: u64) -> Result<()> {
         },
     );
     token::transfer(transfer_cpi_ctx, token_amount)?;
+    msg!("Token transfer successful");
 
-    // Determine how many tokens in USD were deposited.
+    // Determine how many tokens in USD were deposited (6 decimals).
     // Also update the pool's recorded total (sol_deposited / usdc_deposited).
     let deposit_usd = if ctx.accounts.vault_account.key() == pool_state.sol_vault {
-        // Increase total SOL
+        msg!("Processing SOL deposit");
+        // Increase total SOL (9 decimals)
         pool_state.sol_deposited = pool_state
             .sol_deposited
             .checked_add(token_amount)
             .ok_or(VaultError::MathError)?;
+        msg!(
+            "Updated pool SOL balance to {} (9 dec)",
+            pool_state.sol_deposited
+        );
 
+        // Convert SOL to USD (returns USD with 6 decimals)
         get_sol_usd_value(token_amount, pool_state.sol_usd_price)?
     } else if ctx.accounts.vault_account.key() == pool_state.usdc_vault {
-        // Increase total USDC
+        msg!("Processing USDC deposit");
+        // Increase total USDC (6 decimals)
         pool_state.usdc_deposited = pool_state
             .usdc_deposited
             .checked_add(token_amount)
             .ok_or(VaultError::MathError)?;
+        msg!(
+            "Updated pool USDC balance to {} (6 dec)",
+            pool_state.usdc_deposited
+        );
 
-        // 1:1 ratio for USDC -> USD
+        // USDC already has 6 decimals, matching our USD representation
         token_amount
     } else {
         return err!(VaultError::InvalidTokenMint);
     };
+    msg!("Deposit value in USD: {} (6 dec)", deposit_usd);
 
-    // Now compute the *current* AUM (in USD) based on updated totals.
-    // 1) Convert total SOL to USD, 2) Add total USDC
+    // Now compute the *current* AUM (in USD with 6 decimals) based on updated totals.
+    msg!("Computing current AUM");
+    // 1) Convert total SOL to USD (6 decimals), 2) Add total USDC (6 decimals)
     let total_sol_usd = get_sol_usd_value(pool_state.sol_deposited, pool_state.sol_usd_price)?;
+    msg!("Total SOL value in USD: {} (6 dec)", total_sol_usd);
     let current_aum = total_sol_usd
         .checked_add(pool_state.usdc_deposited)
         .ok_or(VaultError::MathError)?;
+    msg!("Current total AUM: {} (6 dec)", current_aum);
 
     // Figure out how many LP tokens to mint:
-    //   if first deposit, deposit_usd tokens
-    //   else deposit_usd * (LP supply / AUM).
+    msg!("Calculating LP tokens to mint");
+    //   if first deposit, deposit_usd tokens (6 decimals)
+    //   else deposit_usd * (LP supply / AUM) -> maintains 6 decimals due to ratio
     let lp_supply = ctx.accounts.lp_token_mint.supply;
+    msg!("Current LP token supply: {}", lp_supply);
+
     let lp_to_mint = if lp_supply == 0 {
+        msg!("First deposit - LP tokens will match USD value");
+        // For first deposit, LP tokens match USD value (6 decimals)
         deposit_usd
     } else {
+        msg!("Calculating proportional LP tokens");
+        // For subsequent deposits:
+        // deposit_usd (6 dec) * lp_supply / current_aum (6 dec) = result with 6 decimals
         deposit_usd
             .checked_mul(lp_supply)
             .ok_or(VaultError::MathError)?
             .checked_div(current_aum.max(1))
             .ok_or(VaultError::MathError)?
     };
+    msg!("Will mint {} LP tokens (6 dec)", lp_to_mint);
 
     // Update user rewards (if you track them), then mint LP
+    msg!("Updating user rewards before minting");
     update_user_rewards(pool_state, user_state)?;
 
+    // Mint LP tokens (which maintain 6 decimals like USD)
+    msg!("Minting LP tokens to user");
     let cpi_ctx_mint = CpiContext::new(
         ctx.accounts.token_program.to_account_info(),
         MintTo {
@@ -139,13 +172,20 @@ pub fn handle_deposit(ctx: Context<Deposit>, token_amount: u64) -> Result<()> {
         lp_to_mint,
     )?;
 
-    // Update user's record of how many LP tokens they hold
+    // Update user's record of how many LP tokens they hold (6 decimals)
     user_state.owner = ctx.accounts.user.key();
     user_state.lp_token_balance = user_state
         .lp_token_balance
         .checked_add(lp_to_mint)
         .ok_or(VaultError::MathError)?;
+    msg!(
+        "Updated user's LP token balance to {} (6 dec)",
+        user_state.lp_token_balance
+    );
 
-    msg!("Deposit successful. Minted {} LP tokens.", lp_to_mint);
+    msg!(
+        "Deposit successful. Minted {} LP tokens (6 decimals).",
+        lp_to_mint
+    );
     Ok(())
 }
