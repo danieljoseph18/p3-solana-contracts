@@ -38,32 +38,10 @@ async function main() {
   // Create SOL and USDC mints
   console.log("Creating token mints...");
   const solMint = new PublicKey("So11111111111111111111111111111111111111112");
-  console.log("SOL mint created:", solMint.toString());
 
   const usdcMint = new PublicKey(
     "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
   );
-  console.log("USDC mint created:", usdcMint.toString());
-
-  // Create vault accounts
-  console.log("Creating vault accounts...");
-  let solVault = await getOrCreateAssociatedTokenAccount(
-    provider.connection,
-    (provider.wallet as anchor.Wallet).payer,
-    solMint,
-    provider.wallet.publicKey
-  );
-
-  console.log("SOL vault created:", solVault.address.toString());
-
-  let usdcVault = await getOrCreateAssociatedTokenAccount(
-    provider.connection,
-    (provider.wallet as anchor.Wallet).payer,
-    usdcMint,
-    provider.wallet.publicKey
-  );
-
-  console.log("USDC vault created:", usdcVault.address.toString());
 
   // Find pool state PDA
   const [poolState, poolStateBump] = PublicKey.findProgramAddressSync(
@@ -78,6 +56,28 @@ async function main() {
     "using seed:",
     "pool-state"
   );
+
+  // Create vault accounts
+  console.log("Creating vault accounts...");
+  let solVault = await getOrCreateAssociatedTokenAccount(
+    provider.connection,
+    (provider.wallet as anchor.Wallet).payer,
+    solMint,
+    poolState, // Set Pool State as vault owner.
+    true
+  );
+
+  console.log("SOL vault created:", solVault.address.toString());
+
+  let usdcVault = await getOrCreateAssociatedTokenAccount(
+    provider.connection,
+    (provider.wallet as anchor.Wallet).payer,
+    usdcMint,
+    poolState, // Set Pool State as vault owner.
+    true
+  );
+
+  console.log("USDC vault created:", usdcVault.address.toString());
 
   // Create LP token mint
   console.log("Creating LP token mint...");

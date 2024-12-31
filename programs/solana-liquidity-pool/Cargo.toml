@@ -9,7 +9,7 @@ crate-type = ["cdylib", "lib"]
 name = "solana_liquidity_pool"
 
 [features]
-default = []
+default = ["devnet"]
 devnet = []
 mainnet = []
 cpi = ["no-entrypoint"]
