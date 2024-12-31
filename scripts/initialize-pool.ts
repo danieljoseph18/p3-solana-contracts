@@ -5,10 +5,6 @@ import { PublicKey, Keypair, SystemProgram } from "@solana/web3.js";
 import {
   TOKEN_PROGRAM_ID,
   createMint,
-  getAssociatedTokenAddress,
-  createAssociatedTokenAccount,
-  ASSOCIATED_TOKEN_PROGRAM_ID,
-  getAccount,
   getOrCreateAssociatedTokenAccount,
 } from "@solana/spl-token";
 import * as dotenv from "dotenv";
@@ -20,8 +16,13 @@ dotenv.config();
 const CHAINLINK_PROGRAM_ID = new PublicKey(
   "HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny"
 );
+
+/**
+ * On Devnet: 99B2bTijsU6f1GCT73HmdR7HCFFjGMBcPZY6jZ96ynrR
+ * On Mainnet: CH31Xns5z3M1cTAbKW34jcxPPciazARpijcHj9rxtemt
+ */
 const CHAINLINK_SOL_FEED = new PublicKey(
-  "FmAmfoyPXiA8Vhhe6MZTr3U6rZfEZ1ctEHay1ysqCqcf"
+  "99B2bTijsU6f1GCT73HmdR7HCFFjGMBcPZY6jZ96ynrR"
 );
 
 async function main() {

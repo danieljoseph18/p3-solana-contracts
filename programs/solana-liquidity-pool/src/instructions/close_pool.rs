@@ -10,6 +10,7 @@ pub struct ClosePool<'info> {
         mut,
         seeds = [b"pool-state".as_ref()],
         bump,
+        constraint = pool_state.admin == admin.key() @ VaultError::Unauthorized,
         close = admin
     )]
     pub pool_state: Account<'info, PoolState>,

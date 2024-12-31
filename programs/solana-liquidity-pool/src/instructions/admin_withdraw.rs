@@ -1,4 +1,7 @@
-use crate::{errors::VaultError, state::*};
+use crate::{
+    errors::VaultError, state::*, CHAINLINK_PROGRAM_ID, DEVNET_SOL_PRICE_FEED,
+    MAINNET_SOL_PRICE_FEED,
+};
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Token, TokenAccount, Transfer};
 use chainlink_solana as chainlink;
@@ -11,7 +14,8 @@ pub struct AdminWithdraw<'info> {
     #[account(
         mut,
         seeds = [b"pool-state".as_ref()],
-        bump
+        bump,
+        constraint = pool_state.admin == admin.key() @ VaultError::Unauthorized
     )]
     pub pool_state: Account<'info, PoolState>,
 
@@ -21,10 +25,18 @@ pub struct AdminWithdraw<'info> {
     #[account(mut)]
     pub admin_token_account: Account<'info, TokenAccount>,
 
-    /// CHECK: This is the Chainlink program's address
+    /// CHECK: Validated in constraint
+    #[account(address = CHAINLINK_PROGRAM_ID.parse::<Pubkey>().unwrap())]
     pub chainlink_program: AccountInfo<'info>,
 
-    /// CHECK: This is the Chainlink feed account for SOL/USD
+    /// CHECK: Validated in constraint
+    #[account(
+        address = if cfg!(feature = "devnet") {
+            DEVNET_SOL_PRICE_FEED
+        } else {
+            MAINNET_SOL_PRICE_FEED
+        }.parse::<Pubkey>().unwrap()
+    )]
     pub chainlink_feed: AccountInfo<'info>,
 
     pub token_program: Program<'info, Token>,

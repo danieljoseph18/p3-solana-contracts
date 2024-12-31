@@ -11,6 +11,13 @@ pub mod state;
 // Single program ID for this entire program
 declare_id!("3JhuFvHHTxCGeJviVMv4SYUWQ1qAb9tFNy7ZU8dxBhpq");
 
+// Chainlink Program ID (same on all networks)
+pub const CHAINLINK_PROGRAM_ID: &str = "HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny";
+
+// SOL/USD Price Feed Addresses
+pub const MAINNET_SOL_PRICE_FEED: &str = "CH31Xns5z3M1cTAbKW34jcxPPciazARpijcHj9rxtemt";
+pub const DEVNET_SOL_PRICE_FEED: &str = "99B2bTijsU6f1GCT73HmdR7HCFFjGMBcPZY6jZ96ynrR";
+
 #[event]
 pub struct RewardsClaimed {
     pub user: Pubkey,

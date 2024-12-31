@@ -1,4 +1,7 @@
-use crate::{errors::VaultError, instructions::helpers::*, state::*};
+use crate::{
+    errors::VaultError, instructions::helpers::*, state::*, CHAINLINK_PROGRAM_ID,
+    DEVNET_SOL_PRICE_FEED, MAINNET_SOL_PRICE_FEED,
+};
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, Burn, Mint, Token, TokenAccount, Transfer};
 use chainlink_solana as chainlink;
@@ -25,25 +28,49 @@ pub struct Withdraw<'info> {
     pub user_state: Account<'info, UserState>,
 
     /// LP token mint
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = lp_token_mint.key() == pool_state.lp_token_mint
+    )]
     pub lp_token_mint: Account<'info, Mint>,
 
-    /// User's LP token account (where they hold the LP tokens to burn)
-    #[account(mut)]
+    /// User's LP token account to burn from
+    #[account(
+        mut,
+        constraint = user_lp_token_account.owner == user.key(),
+        constraint = user_lp_token_account.mint == lp_token_mint.key()
+    )]
     pub user_lp_token_account: Account<'info, TokenAccount>,
 
-    /// Vault for SOL or USDC
-    #[account(mut)]
+    /// Vault for either SOL (wrapped) or USDC
+    #[account(
+        mut,
+        constraint = 
+            vault_account.key() == pool_state.sol_vault || 
+            vault_account.key() == pool_state.usdc_vault
+    )]
     pub vault_account: Account<'info, TokenAccount>,
 
-    /// User's token account to receive the withdrawn tokens
-    #[account(mut)]
+    /// User's token account to receive withdrawn tokens
+    #[account(
+        mut,
+        constraint = user_token_account.owner == user.key(),
+        constraint = user_token_account.mint == vault_account.mint
+    )]
     pub user_token_account: Account<'info, TokenAccount>,
 
-    /// CHECK: This is the Chainlink program's address
+    /// CHECK: Validated in constraint
+    #[account(address = CHAINLINK_PROGRAM_ID.parse::<Pubkey>().unwrap())]
     pub chainlink_program: AccountInfo<'info>,
 
-    /// CHECK: This is the Chainlink feed account for SOL/USD
+    /// CHECK: Validated in constraint
+    #[account(
+        address = if cfg!(feature = "devnet") {
+            DEVNET_SOL_PRICE_FEED
+        } else {
+            MAINNET_SOL_PRICE_FEED
+        }.parse::<Pubkey>().unwrap()
+    )]
     pub chainlink_feed: AccountInfo<'info>,
 
     pub token_program: Program<'info, Token>,

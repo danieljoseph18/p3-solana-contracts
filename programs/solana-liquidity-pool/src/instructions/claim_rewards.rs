@@ -19,14 +19,22 @@ pub struct ClaimRewards<'info> {
     #[account(
         mut,
         seeds = [b"user-state".as_ref(), user.key().as_ref()],
-        bump
+        bump,
+        constraint = user_state.owner == user.key()
     )]
     pub user_state: Account<'info, UserState>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = usdc_reward_vault.key() == pool_state.usdc_reward_vault
+    )]
     pub usdc_reward_vault: Account<'info, TokenAccount>,
 
-    #[account(mut)]
+    #[account(
+        mut,
+        constraint = user_usdc_account.owner == user.key(),
+        constraint = user_usdc_account.mint == usdc_reward_vault.mint
+    )]
     pub user_usdc_account: Account<'info, TokenAccount>,
 
     pub token_program: Program<'info, Token>,
