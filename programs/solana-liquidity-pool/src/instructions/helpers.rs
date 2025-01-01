@@ -1,53 +1,60 @@
-use crate::state::{PoolState, UserState};
+use crate::{
+    errors::VaultError,
+    state::{PoolState, UserState},
+};
 use anchor_lang::prelude::*;
+use anchor_spl::token::Mint;
 
-/// Update the user’s pending rewards right before their LP balance changes.
-pub fn update_user_rewards(
-    pool_state: &mut Account<PoolState>,
-    user_state: &mut Account<UserState>,
+pub fn update_rewards(
+    pool_state: &mut PoolState,
+    user_state: &mut UserState,
+    lp_token_mint: &Account<Mint>,
 ) -> Result<()> {
-    // If user has zero LP, there's no new accrual
-    if user_state.lp_token_balance == 0 {
-        user_state.last_claim_timestamp = Clock::get()?.unix_timestamp as u64;
-        return Ok(());
-    }
+    const PRECISION: u128 = 1_000_000_000_000;
 
     let now = Clock::get()?.unix_timestamp as u64;
-    let last_claim = user_state.last_claim_timestamp;
 
-    // If before start or after end, no accrual
-    if now <= pool_state.reward_start_time || last_claim >= pool_state.reward_end_time {
-        user_state.last_claim_timestamp = now;
+    if lp_token_mint.supply == 0 {
+        pool_state.last_distribution_time = now;
         return Ok(());
     }
 
-    // Bound the claim window
-    let claim_start = last_claim.max(pool_state.reward_start_time);
-    let claim_end = now.min(pool_state.reward_end_time);
-    let time_elapsed = claim_end.saturating_sub(claim_start);
+    let time_diff = now.saturating_sub(pool_state.last_distribution_time);
+    if time_diff > 0 {
+        let pending_rewards = (pool_state.tokens_per_interval as u128)
+            .checked_mul(time_diff as u128)
+            .ok_or(VaultError::MathError)?;
 
-    if time_elapsed == 0 {
-        user_state.last_claim_timestamp = now;
-        return Ok(());
+        let reward_per_token = pending_rewards
+            .checked_mul(PRECISION)
+            .ok_or(VaultError::MathError)?
+            .checked_div(lp_token_mint.supply as u128)
+            .ok_or(VaultError::MathError)?;
+
+        pool_state.cumulative_reward_per_token = pool_state
+            .cumulative_reward_per_token
+            .checked_add(reward_per_token)
+            .ok_or(VaultError::MathError)?;
+
+        pool_state.last_distribution_time = now;
     }
 
-    // Calculate newly accrued rewards for the user
-    // pending = (lp_token_balance * tokens_per_interval) * time_elapsed
-    let newly_accrued = user_state
-        .lp_token_balance
-        .checked_mul(pool_state.tokens_per_interval)
-        .ok_or_else(|| error!(crate::errors::VaultError::MathError))?
-        .checked_mul(time_elapsed)
-        .ok_or_else(|| error!(crate::errors::VaultError::MathError))?;
+    let user_reward = (user_state.lp_token_balance as u128)
+        .checked_mul(
+            pool_state
+                .cumulative_reward_per_token
+                .saturating_sub(user_state.previous_cumulated_reward_per_token),
+        )
+        .ok_or(VaultError::MathError)?
+        .checked_div(PRECISION)
+        .ok_or(VaultError::MathError)?;
 
-    // 1) Add the newly accrued to user_state.pending_rewards
     user_state.pending_rewards = user_state
         .pending_rewards
-        .checked_add(newly_accrued)
-        .ok_or_else(|| error!(crate::errors::VaultError::MathError))?;
+        .checked_add(user_reward as u64)
+        .ok_or(VaultError::MathError)?;
 
-    // 2) Update user’s last claim timestamp
-    user_state.last_claim_timestamp = now;
+    user_state.previous_cumulated_reward_per_token = pool_state.cumulative_reward_per_token;
 
     Ok(())
 }

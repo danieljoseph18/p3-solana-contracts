@@ -87,6 +87,10 @@ pub struct PoolState {
 
     /// How many USDC have actually been claimed by users so far (6 decimals)
     pub total_rewards_claimed: u64,
+
+    pub cumulative_reward_per_token: u128, // Using u128 for precision
+
+    pub last_distribution_time: u64,
 }
 
 impl PoolState {
@@ -103,7 +107,9 @@ impl PoolState {
         + 32                  // usdc_reward_vault
         + 16                  // sol_usd_price (i128)
         + 8                   // total_rewards_deposited
-        + 8; // total_rewards_claimed
+        + 8                   // total_rewards_claimed
+        + 16                  // cumulative_reward_per_token
+        + 8; // last_distribution_time
 }
 
 /// UserState stores user-specific info (in practice often combined into a single PDA).
@@ -120,13 +126,17 @@ pub struct UserState {
 
     /// Accumulated USDC rewards that have not yet been claimed
     pub pending_rewards: u64,
+
+    /// Previous cumulative reward per token
+    pub previous_cumulated_reward_per_token: u128,
 }
 
 impl UserState {
     pub const LEN: usize = 32 // owner
         + 8  // lp_token_balance
         + 8  // last_claim_timestamp
-        + 8; // pending_rewards
+        + 8  // pending_rewards
+        + 16; // previous_cumulated_reward_per_token
 }
 
 // -----------------------------------------------

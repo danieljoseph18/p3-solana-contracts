@@ -42,6 +42,11 @@ pub mod solana_liquidity_pool {
         instructions::close_pool::handle_close_pool(ctx)
     }
 
+    /// Close the user state (user only)
+    pub fn close_user_state(ctx: Context<CloseUserState>) -> Result<()> {
+        instructions::close_user_state::handle_close_user_state(ctx)
+    }
+
     /// Deposit SOL or USDC into the pool
     pub fn deposit(ctx: Context<Deposit>, token_amount: u64) -> Result<()> {
         instructions::deposit::handle_deposit(ctx, token_amount)
@@ -74,6 +79,15 @@ pub mod solana_liquidity_pool {
     /// Claim user rewards
     pub fn claim_rewards(ctx: Context<ClaimRewards>) -> Result<()> {
         instructions::claim_rewards::handle_claim_rewards(ctx)
+    }
+
+    /// Initialize user state
+    pub fn initialize_user(ctx: Context<InitializeUser>) -> Result<()> {
+        instructions::initialize_user::handle_initialize_user(ctx)
+    }
+
+    pub fn force_close_user_state(ctx: Context<ForceCloseUserState>) -> Result<()> {
+        instructions::force_close_user_state::handle_force_close_user_state(ctx)
     }
 }
 

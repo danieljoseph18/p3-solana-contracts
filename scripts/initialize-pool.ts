@@ -6,13 +6,14 @@ import {
   TOKEN_PROGRAM_ID,
   createMint,
   getOrCreateAssociatedTokenAccount,
+  mintTo,
 } from "@solana/spl-token";
 import * as dotenv from "dotenv";
 
 // Load environment variables
 dotenv.config();
 
-// Chainlink addresses (devnet)
+// Chainlink addresses (devnet & mainnet)
 const CHAINLINK_PROGRAM_ID = new PublicKey(
   "HEvSKofvBgfaexv23kMabbYqxasxU3mQ4ibBMEmJWHny"
 );
@@ -21,10 +22,13 @@ const CHAINLINK_PROGRAM_ID = new PublicKey(
  * On Devnet: 99B2bTijsU6f1GCT73HmdR7HCFFjGMBcPZY6jZ96ynrR
  * On Mainnet: CH31Xns5z3M1cTAbKW34jcxPPciazARpijcHj9rxtemt
  */
-const CHAINLINK_SOL_FEED = new PublicKey(
-  "99B2bTijsU6f1GCT73HmdR7HCFFjGMBcPZY6jZ96ynrR"
-);
+const CHAINLINK_SOL_FEED = process.env.IS_DEVNET
+  ? new PublicKey("99B2bTijsU6f1GCT73HmdR7HCFFjGMBcPZY6jZ96ynrR")
+  : new PublicKey("CH31Xns5z3M1cTAbKW34jcxPPciazARpijcHj9rxtemt");
 
+/**
+ * @dev to deploy run: anchor deploy --provider.cluster devnet
+ */
 async function main() {
   // Set up anchor provider
   const provider = anchor.AnchorProvider.env();
@@ -35,13 +39,12 @@ async function main() {
 
   console.log("Program ID:", program.programId.toString());
 
-  // Create SOL and USDC mints
+  // Create SOL and mock USDC mints
   console.log("Creating token mints...");
   const solMint = new PublicKey("So11111111111111111111111111111111111111112");
-
-  const usdcMint = new PublicKey(
-    "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
-  );
+  const usdcMint = process.env.IS_DEVNET
+    ? new PublicKey("7ggkvgP7jijLpQBV5GXcqugTMrc2JqDi9tiCH36SVg7A")
+    : new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v");
 
   // Find pool state PDA
   const [poolState, poolStateBump] = PublicKey.findProgramAddressSync(
@@ -72,8 +75,8 @@ async function main() {
   let usdcVault = await getOrCreateAssociatedTokenAccount(
     provider.connection,
     (provider.wallet as anchor.Wallet).payer,
-    usdcMint,
-    poolState, // Set Pool State as vault owner.
+    usdcMint, // Use mock USDC mint
+    poolState,
     true
   );
 
@@ -115,6 +118,14 @@ async function main() {
       .rpc();
 
     console.log("Pool initialized successfully!");
+
+    // Log important addresses for future reference
+    console.log("\nImportant addresses:");
+    console.log("USDC Mint:", usdcMint.toString());
+    console.log("Pool State:", poolState.toString());
+    console.log("SOL Vault:", solVault.address.toString());
+    console.log("USDC Vault:", usdcVault.address.toString());
+    console.log("LP Token Mint:", lpTokenMintKeypair.publicKey.toString());
   } catch (error) {
     console.error("Failed to initialize pool:", error);
     throw error;

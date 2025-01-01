@@ -1,8 +1,8 @@
-use crate::instructions::helpers::update_user_rewards;
+use crate::instructions::helpers::update_rewards;
 use crate::state::*;
 use crate::{errors::VaultError, RewardsClaimed};
 use anchor_lang::prelude::*;
-use anchor_spl::token::{self, Token, TokenAccount, Transfer};
+use anchor_spl::token::{self, Mint, Token, TokenAccount, Transfer};
 
 #[derive(Accounts)]
 pub struct ClaimRewards<'info> {
@@ -26,7 +26,8 @@ pub struct ClaimRewards<'info> {
 
     #[account(
         mut,
-        constraint = usdc_reward_vault.key() == pool_state.usdc_reward_vault
+        constraint = usdc_reward_vault.key() == pool_state.usdc_reward_vault,
+        constraint = usdc_reward_vault.owner == pool_state.key() @ VaultError::InvalidOwner
     )]
     pub usdc_reward_vault: Account<'info, TokenAccount>,
 
@@ -38,19 +39,43 @@ pub struct ClaimRewards<'info> {
     pub user_usdc_account: Account<'info, TokenAccount>,
 
     pub token_program: Program<'info, Token>,
+
+    #[account(
+        constraint = lp_token_mint.key() == pool_state.lp_token_mint @ VaultError::InvalidTokenMint
+    )]
+    pub lp_token_mint: Account<'info, Mint>,
 }
 
 pub fn handle_claim_rewards(ctx: Context<ClaimRewards>) -> Result<()> {
-    // First, grab an immutable reference to the pool_state AccountInfo
-    // to use as the authority in the token transfer.
-    let pool_state_info = ctx.accounts.pool_state.to_account_info();
+    // Store validation values up front
+    let now = Clock::get()?.unix_timestamp as u64;
+    let reward_start_time = ctx.accounts.pool_state.reward_start_time;
+    let total_rewards_deposited = ctx.accounts.pool_state.total_rewards_deposited;
+    let total_rewards_claimed = ctx.accounts.pool_state.total_rewards_claimed;
+    let vault_amount = ctx.accounts.usdc_reward_vault.amount;
+    let pool_state_bump = ctx.bumps.pool_state;
 
-    // Next, create a mutable reference to the PoolState account data.
+    // Do validation checks with stored values
+    require!(now >= reward_start_time, VaultError::RewardsNotStarted);
+
+    require!(
+        ctx.accounts.user_state.lp_token_balance > 0,
+        VaultError::NoLPTokens
+    );
+
+    let available = total_rewards_deposited.saturating_sub(total_rewards_claimed);
+
+    require!(
+        vault_amount >= available,
+        VaultError::InsufficientRewardBalance
+    );
+
+    // Now take mutable references for state updates
     let pool_state = &mut ctx.accounts.pool_state;
     let user_state = &mut ctx.accounts.user_state;
 
     // 1) Update user’s accrual to get an up-to-date `pending_rewards`
-    update_user_rewards(pool_state, user_state)?;
+    update_rewards(pool_state, user_state, &ctx.accounts.lp_token_mint)?;
 
     // 2) The user now has some "pending" amount stored locally
     let pending = user_state.pending_rewards;
@@ -63,6 +88,13 @@ pub fn handle_claim_rewards(ctx: Context<ClaimRewards>) -> Result<()> {
     let available = pool_state
         .total_rewards_deposited
         .saturating_sub(pool_state.total_rewards_claimed);
+
+    // Add vault balance check
+    let vault_balance = ctx.accounts.usdc_reward_vault.amount;
+    require!(
+        vault_balance >= available,
+        VaultError::InsufficientRewardBalance
+    );
 
     // Clamp the user’s claim if not enough remains in the reward pool
     let to_claim = pending.min(available);
@@ -77,11 +109,11 @@ pub fn handle_claim_rewards(ctx: Context<ClaimRewards>) -> Result<()> {
         Transfer {
             from: ctx.accounts.usdc_reward_vault.to_account_info(),
             to: ctx.accounts.user_usdc_account.to_account_info(),
-            authority: pool_state_info, // the account that signs for the vault
+            authority: pool_state.to_account_info(), // Use pool_state reference instead
         },
     );
     token::transfer(
-        cpi_ctx.with_signer(&[&[b"pool-state".as_ref(), &[ctx.bumps.pool_state]]]),
+        cpi_ctx.with_signer(&[&[b"pool-state".as_ref(), &[pool_state_bump]]]),
         to_claim,
     )?;
 

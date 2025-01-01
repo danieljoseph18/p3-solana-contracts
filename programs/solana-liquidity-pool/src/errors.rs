@@ -12,4 +12,12 @@ pub enum VaultError {
     RewardsEnded,
     #[msg("Invalid token mint provided.")]
     InvalidTokenMint,
+    #[msg("Invalid owner.")]
+    InvalidOwner,
+    #[msg("Rewards have not started yet.")]
+    RewardsNotStarted,
+    #[msg("No LP tokens found.")]
+    NoLPTokens,
+    #[msg("Insufficient reward balance.")]
+    InsufficientRewardBalance,
 }

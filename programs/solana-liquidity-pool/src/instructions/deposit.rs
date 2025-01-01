@@ -41,7 +41,7 @@ pub struct Deposit<'info> {
     #[account(
         init_if_needed,
         payer = user,
-        space = 8 + std::mem::size_of::<UserState>(),
+        space = 8 + UserState::LEN,
         seeds = [b"user-state".as_ref(), user.key().as_ref()],
         bump
     )]
@@ -112,6 +112,18 @@ pub fn handle_deposit(ctx: Context<Deposit>, token_amount: u64) -> Result<()> {
     token::transfer(transfer_cpi_ctx, token_amount)?;
     msg!("Token transfer successful");
 
+    // Now compute the *initial* AUM (in USD with 6 decimals) based on updated totals.
+    msg!("Computing initial AUM");
+        
+    // 1) Convert total SOL to USD (6 decimals), 2) Add total USDC (6 decimals)
+    let total_sol_usd = get_sol_usd_value(pool_state.sol_deposited, pool_state.sol_usd_price)?;
+    msg!("Total SOL value in USD: {} (6 dec)", total_sol_usd);
+    
+    let initial_aum = total_sol_usd
+    .checked_add(pool_state.usdc_deposited)
+    .ok_or(VaultError::MathError)?;
+    msg!("Initial total AUM: {} (6 dec)", initial_aum);
+
     // Determine how many tokens in USD were deposited (6 decimals).
     // Also update the pool's recorded total (sol_deposited / usdc_deposited).
     let deposit_usd = if ctx.accounts.vault_account.key() == pool_state.sol_vault {
@@ -147,16 +159,6 @@ pub fn handle_deposit(ctx: Context<Deposit>, token_amount: u64) -> Result<()> {
     };
     msg!("Deposit value in USD: {} (6 dec)", deposit_usd);
 
-    // Now compute the *current* AUM (in USD with 6 decimals) based on updated totals.
-    msg!("Computing current AUM");
-    // 1) Convert total SOL to USD (6 decimals), 2) Add total USDC (6 decimals)
-    let total_sol_usd = get_sol_usd_value(pool_state.sol_deposited, pool_state.sol_usd_price)?;
-    msg!("Total SOL value in USD: {} (6 dec)", total_sol_usd);
-    let current_aum = total_sol_usd
-        .checked_add(pool_state.usdc_deposited)
-        .ok_or(VaultError::MathError)?;
-    msg!("Current total AUM: {} (6 dec)", current_aum);
-
     // Figure out how many LP tokens to mint:
     msg!("Calculating LP tokens to mint");
     //   if first deposit, deposit_usd tokens (6 decimals)
@@ -171,18 +173,21 @@ pub fn handle_deposit(ctx: Context<Deposit>, token_amount: u64) -> Result<()> {
     } else {
         msg!("Calculating proportional LP tokens");
         // For subsequent deposits:
-        // deposit_usd (6 dec) * lp_supply / current_aum (6 dec) = result with 6 decimals
+        // deposit_usd (6 dec) * lp_supply / initial_aum (6 dec) = result with 6 decimals
+        // initial_aum / lp_supply gives = lp_token_price
+        // lp_to_mint = deposit_usd / (initial_aum / lp_supply)
+        // so we can reverse the formula to: lp_to_mint = deposit_usd * (lp_supply / initial_aum)
         deposit_usd
             .checked_mul(lp_supply)
             .ok_or(VaultError::MathError)?
-            .checked_div(current_aum.max(1))
+            .checked_div(initial_aum.max(1))
             .ok_or(VaultError::MathError)?
     };
     msg!("Will mint {} LP tokens (6 dec)", lp_to_mint);
 
-    // Update user rewards (if you track them), then mint LP
+    // Update user rewards, then mint LP
     msg!("Updating user rewards before minting");
-    update_user_rewards(pool_state, user_state)?;
+    update_rewards(pool_state, user_state, &ctx.accounts.lp_token_mint)?;
 
     // Mint LP tokens (which maintain 6 decimals like USD)
     msg!("Minting LP tokens to user");

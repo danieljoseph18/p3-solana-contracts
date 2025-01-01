@@ -28,8 +28,8 @@ pub struct StartRewards<'info> {
 
 pub fn handle_start_rewards(
     ctx: Context<StartRewards>,
-    usdc_amount: u64,
-    tokens_per_interval: u64,
+    usdc_amount: u64,          // Total rewards for the period
+    _tokens_per_interval: u64, // We'll calculate this ourselves
 ) -> Result<()> {
     let pool_state = &mut ctx.accounts.pool_state;
     require_keys_eq!(
@@ -38,7 +38,7 @@ pub fn handle_start_rewards(
         VaultError::Unauthorized
     );
 
-    // Transfer USDC from admin to the program's reward vault
+    // Transfer USDC from admin to reward vault
     let cpi_ctx = CpiContext::new(
         ctx.accounts.token_program.to_account_info(),
         Transfer {
@@ -49,22 +49,16 @@ pub fn handle_start_rewards(
     );
     token::transfer(cpi_ctx, usdc_amount)?;
 
-    // Record how many rewards were added for this reward period
+    // Calculate tokens per interval (per second)
+    let tokens_per_interval = usdc_amount
+        .checked_div(604800) // One week in seconds
+        .ok_or(VaultError::MathError)?;
+
+    // Update state
     pool_state.total_rewards_deposited = usdc_amount;
-    pool_state.total_rewards_claimed = 0; // reset for the new period
-
-    // Set rate & reward times
+    pool_state.total_rewards_claimed = 0;
     pool_state.tokens_per_interval = tokens_per_interval;
-    let now = Clock::get()?.unix_timestamp as u64;
-    pool_state.reward_start_time = now;
-    pool_state.reward_end_time = now
-        .checked_add(604800)
-        .ok_or_else(|| error!(VaultError::MathError))?;
+    pool_state.last_distribution_time = Clock::get()?.unix_timestamp as u64;
 
-    msg!(
-        "Started new reward distribution: {} USDC at rate {}",
-        usdc_amount,
-        tokens_per_interval
-    );
     Ok(())
 }

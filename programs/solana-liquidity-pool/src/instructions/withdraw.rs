@@ -97,7 +97,7 @@ pub fn handle_withdraw(ctx: Context<Withdraw>, lp_token_amount: u64) -> Result<(
 
     // Update any user-level rewards prior to burning LP
     msg!("Updating user rewards before burning LP tokens");
-    update_user_rewards(pool_state, user_state)?;
+    update_rewards(pool_state, user_state, &ctx.accounts.lp_token_mint)?;
 
     // Burn the LP tokens (6 decimals, matching USD representation)
     msg!("Burning {} LP tokens", lp_token_amount);
